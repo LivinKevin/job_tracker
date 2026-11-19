@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ company.company_name }}</h1>
+<p class="text-muted">{{ company.industry or '' }} · {{ [company.city, company.state] | select | join(', ') }}</p>
+<p>{{ company.website or '' }}</p>
+<p>{{ company.notes or '' }}</p>
+
+<h4>Jobs</h4>
+<ul>{% for j in jobs %}<li>{{ j.job_title }} ({{ j.job_type }})</li>{% else %}<li class="text-muted">None</li>{% endfor %}</ul>
+
+<h4>Contacts</h4>
+<ul>{% for c in contacts %}<li>{{ c.contact_name }}, {{ c.title or '' }}</li>{% else %}<li class="text-muted">None</li>{% endfor %}</ul>
+
+<a href="{{ url_for('companies') }}">Back to companies</a>
+{% endblock %}
