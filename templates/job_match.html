@@ -1,6 +1,7 @@
  {% extends "base.html" %}
 {% block content %}
-<h1>Job Match</h1>
+{% from "_icons.html" import icon %}
+<h1 class="page-title"><span class="title-icon ic-purple">{{ icon('match') }}</span>Job Match</h1>
 <p class="text-muted">Enter your skills and see which jobs fit best.</p>
 
 <form method="get" class="row g-2 mb-4">

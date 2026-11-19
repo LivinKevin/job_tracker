@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
+{% from "_icons.html" import icon %}
 {% set colors = {'Applied': 'primary', 'Screening': 'info', 'Interview': 'warning',
                  'Offer': 'success', 'Rejected': 'danger', 'Withdrawn': 'secondary'} %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <h1>Applications</h1>
+  <h1 class="page-title"><span class="title-icon ic-orange">{{ icon('applications') }}</span>Applications</h1>
   <a class="btn btn-primary" href="{{ url_for('add_application') }}">Add Application</a>
 </div>
 {% if applications %}
