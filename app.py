@@ -2,6 +2,7 @@ import json
 import os
 from flask import Flask, render_template, request, redirect, url_for, flash, abort
 from database import get_db
+from datetime import date
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret")  # needed later for flash messages
@@ -254,6 +255,161 @@ def delete_job(job_id):
     conn.close()
     flash("Job deleted.", "warning")
     return redirect(url_for("jobs"))
+
+# Applications CRUD routes
+STATUSES = ["Applied", "Screening", "Interview", "Offer", "Rejected", "Withdrawn"]
+
+def pretty_json(value):
+    # Turns the JSON column's text into indented text for the edit textarea
+    if not value:
+        return ""
+    if isinstance(value, (bytes, bytearray)):
+        value = value.decode()
+    parsed = json.loads(value) if isinstance(value, str) else value
+    return json.dumps(parsed, indent=2)
+
+def read_application_form():
+    f = request.form
+    def clean(key):
+        return f.get(key, "").strip() or None
+    interview_text = f.get("interview_data", "").strip()
+    data = {
+        "job_id": clean("job_id"),
+        "application_date": clean("application_date"),
+        "status": clean("status"),
+        "resume_version": clean("resume_version"),
+        "cover_letter_sent": 1 if f.get("cover_letter_sent") else 0,      
+        # checkbox: present = checked
+        "interview_data": interview_text or None,
+    }
+    return data, interview_text
+
+def validate_application(data):
+    errors = []
+    if not data["job_id"]:
+        errors.append("Job is required.")
+    if not data["application_date"]:
+        errors.append("Application date is required.")
+    else:
+        try:
+            date.fromisoformat(data["application_date"])
+        except ValueError:
+            errors.append("Application date must be a valid date.")
+    if data["status"] not in STATUSES:
+        errors.append("Choose a valid status.")
+    if data["interview_data"]:
+        try:
+            json.loads(data["interview_data"])
+        except json.JSONDecodeError:
+            errors.append("Interview data must be valid JSON, for example "
+                          '{"interview_rounds": 2, "feedback": "Went well"}.')
+    return errors
+
+def render_application_form(action, application, interview_text, errors=()):
+    for message in errors:
+        flash(message, "danger")
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT j.job_id, j.job_title, c.company_name FROM jobs j "
+        "JOIN companies c ON j.company_id = c.company_id "
+        "ORDER BY c.company_name, j.job_title")
+    job_list = cursor.fetchall()
+    conn.close()
+    return render_template("application_form.html", action=action, application=application,
+                           interview_text=interview_text, jobs=job_list, statuses=STATUSES)
+
+def get_application_or_404(cursor, application_id):
+    cursor.execute("SELECT * FROM applications WHERE application_id = %s", (application_id,))
+    application = cursor.fetchone()
+    if application is None:
+        abort(404)
+    return application
+
+@app.route("/applications")
+def applications():
+    # READ (list): applications joined with job title and company name
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT a.*, j.job_title, c.company_name FROM applications a "
+        "JOIN jobs j ON a.job_id = j.job_id "
+        "JOIN companies c ON j.company_id = c.company_id "
+        "ORDER BY a.application_date DESC, a.application_id DESC")
+    rows = cursor.fetchall()
+    conn.close()
+    return render_template("applications.html", applications=rows)
+
+@app.route("/applications/<int:application_id>")
+def application_detail(application_id):
+    # READ (detail)
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    application = get_application_or_404(cursor, application_id)
+    cursor.execute(
+        "SELECT j.job_id, j.job_title, c.company_id, c.company_name FROM jobs j "
+        "JOIN companies c ON j.company_id = c.company_id WHERE j.job_id = %s",
+        (application["job_id"],))
+    job = cursor.fetchone()
+    conn.close()
+    return render_template("application_detail.html", application=application, job=job,
+                           interview_text=pretty_json(application["interview_data"]))
+
+@app.route("/applications/add", methods=["GET", "POST"])
+def add_application():
+    # CREATE
+    if request.method == "POST":
+        data, interview_text = read_application_form()
+        errors = validate_application(data)
+        if errors:
+            return render_application_form("Add", data, interview_text, errors)
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO applications (job_id, application_date, status, resume_version, "
+            "cover_letter_sent, interview_data) VALUES (%s, %s, %s, %s, %s, %s)",
+            tuple(data.values()))
+        conn.commit()
+        conn.close()
+        flash("Application added.", "success")
+        return redirect(url_for("applications"))
+    defaults = {"application_date": date.today().isoformat(), "status": "Applied"}
+    return render_application_form("Add", defaults, "")
+
+@app.route("/applications/<int:application_id>/edit", methods=["GET", "POST"])
+def edit_application(application_id):
+    # UPDATE
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    application = get_application_or_404(cursor, application_id)
+    if request.method == "POST":
+        data, interview_text = read_application_form()
+        errors = validate_application(data)
+        if errors:
+            conn.close()
+            return render_application_form("Edit", data, interview_text, errors)
+        cursor.execute(
+            "UPDATE applications SET job_id=%s, application_date=%s, status=%s, "
+            "resume_version=%s, cover_letter_sent=%s, interview_data=%s WHERE application_id=%s",
+            tuple(data.values()) + (application_id,))
+        conn.commit()
+        conn.close()
+        flash("Application updated.", "success")
+        return redirect(url_for("applications"))
+    conn.close()
+    return render_application_form("Edit", application, pretty_json(application["interview_data"]))
+
+@app.route("/applications/<int:application_id>/delete", methods=["POST"])
+def delete_application(application_id):
+    # DELETE
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM applications WHERE application_id = %s", (application_id,))
+    conn.commit()
+    conn.close()
+    flash("Application deleted.", "warning")
+    return redirect(url_for("applications"))
+
 
 if __name__ == "__main__":
     app.run(debug=True)
