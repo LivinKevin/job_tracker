@@ -410,6 +410,118 @@ def delete_application(application_id):
     flash("Application deleted.", "warning")
     return redirect(url_for("applications"))
 
+# Contacts CRUD routes
+CONTACT_FIELDS = ("company_id", "contact_name", "title", "email", "phone", "linkedin_url", "notes")
+
+def read_contact_form():
+    return {k: request.form.get(k, "").strip() or None for k in CONTACT_FIELDS}
+
+def validate_contact(data):
+    errors = []
+    if not data["company_id"]:
+        errors.append("Company is required.")
+    if not data["contact_name"]:
+        errors.append("Contact name is required.")
+    if data["email"] and ("@" not in data["email"] or "." not in data["email"].split("@")[-1]):
+        errors.append("Enter a valid email address.")
+    if data["phone"] and len(data["phone"]) > 20:
+        errors.append("Phone number must be 20 characters or fewer.")
+    return errors
+
+def render_contact_form(action, contact, errors=()):
+    for message in errors:
+        flash(message, "danger")
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT company_id, company_name FROM companies ORDER BY company_name")
+    company_list = cursor.fetchall()
+    conn.close()
+    return render_template("contact_form.html", action=action, contact=contact, companies=company_list)
+
+def get_contact_or_404(cursor, contact_id):
+    cursor.execute("SELECT * FROM contacts WHERE contact_id = %s", (contact_id,))
+    contact = cursor.fetchone()
+    if contact is None:
+        abort(404)
+    return contact
+
+@app.route("/contacts")
+def contacts():
+    # READ (list): contacts joined with company name
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT ct.*, c.company_name FROM contacts ct "
+        "JOIN companies c ON ct.company_id = c.company_id "
+        "ORDER BY ct.contact_name")
+    rows = cursor.fetchall()
+    conn.close()
+    return render_template("contacts.html", contacts=rows)
+
+@app.route("/contacts/<int:contact_id>")
+def contact_detail(contact_id):
+    # READ (detail)
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    contact = get_contact_or_404(cursor, contact_id)
+    cursor.execute("SELECT * FROM companies WHERE company_id = %s", (contact["company_id"],))
+    company = cursor.fetchone()
+    conn.close()
+    return render_template("contact_detail.html", contact=contact, company=company)
+
+@app.route("/contacts/add", methods=["GET", "POST"])
+def add_contact():
+    # CREATE
+    if request.method == "POST":
+        data = read_contact_form()
+        errors = validate_contact(data)
+        if errors:
+            return render_contact_form("Add", data, errors)
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO contacts (company_id, contact_name, title, email, phone, linkedin_url, notes) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s)", tuple(data.values()))
+        conn.commit()
+        conn.close()
+        flash("Contact added.", "success")
+        return redirect(url_for("contacts"))
+    return render_contact_form("Add", {})
+
+@app.route("/contacts/<int:contact_id>/edit", methods=["GET", "POST"])
+def edit_contact(contact_id):
+    # UPDATE
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    contact = get_contact_or_404(cursor, contact_id)
+    if request.method == "POST":
+        data = read_contact_form()
+        errors = validate_contact(data)
+        if errors:
+            conn.close()
+            return render_contact_form("Edit", data, errors)
+        cursor.execute(
+            "UPDATE contacts SET company_id=%s, contact_name=%s, title=%s, email=%s, "
+            "phone=%s, linkedin_url=%s, notes=%s WHERE contact_id=%s",
+            tuple(data.values()) + (contact_id,))
+        conn.commit()
+        conn.close()
+        flash("Contact updated.", "success")
+        return redirect(url_for("contacts"))
+    conn.close()
+    return render_contact_form("Edit", contact)
+
+@app.route("/contacts/<int:contact_id>/delete", methods=["POST"])
+def delete_contact(contact_id):
+    # DELETE
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM contacts WHERE contact_id = %s", (contact_id,))
+    conn.commit()
+    conn.close()
+    flash("Contact deleted.", "warning")
+    return redirect(url_for("contacts"))
+
 
 if __name__ == "__main__":
     app.run(debug=True)
