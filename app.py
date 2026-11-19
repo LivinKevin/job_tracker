@@ -8,13 +8,57 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret")  # needed later for flash messages
 
 @app.route("/")
+@app.route("/")
 def dashboard():
     conn = get_db()
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT COUNT(*) AS count FROM applications")
-    stats = cursor.fetchone()
+
+    # Four totals in one query
+    cursor.execute(
+        "SELECT (SELECT COUNT(*) FROM companies) AS total_companies, "
+        "(SELECT COUNT(*) FROM jobs) AS total_jobs, "
+        "(SELECT COUNT(*) FROM applications) AS total_applications, "
+        "(SELECT COUNT(*) FROM contacts) AS total_contacts")
+    totals = cursor.fetchone()
+
+    # Applications per status
+    cursor.execute("SELECT status, COUNT(*) AS count FROM applications "
+                   "GROUP BY status ORDER BY count DESC")
+    by_status = cursor.fetchall()
+
+    # Companies with the most job postings
+    cursor.execute(
+        "SELECT c.company_name, COUNT(j.job_id) AS job_count FROM companies c "
+        "LEFT JOIN jobs j ON c.company_id = j.company_id "
+        "GROUP BY c.company_id, c.company_name "
+        "ORDER BY job_count DESC, c.company_name LIMIT 5")
+    top_companies = cursor.fetchall()
+
+    # Average salary range by industry
+    cursor.execute(
+        "SELECT c.industry, ROUND(AVG(j.salary_min)) AS avg_min, ROUND(AVG(j.salary_max)) AS avg_max "
+        "FROM companies c JOIN jobs j ON c.company_id = j.company_id "
+        "WHERE j.salary_min IS NOT NULL AND c.industry IS NOT NULL "
+        "GROUP BY c.industry ORDER BY avg_max DESC")
+    salaries = cursor.fetchall()
+
+    # Five most recent applications
+    cursor.execute(
+        "SELECT a.application_id, a.application_date, a.status, j.job_title, c.company_name "
+        "FROM applications a JOIN jobs j ON a.job_id = j.job_id "
+        "JOIN companies c ON j.company_id = c.company_id "
+        "ORDER BY a.application_date DESC, a.application_id DESC LIMIT 5")
+    recent = cursor.fetchall()
     conn.close()
-    return render_template("dashboard.html", stats=stats)
+
+    # Response rate = applications that moved past "Applied"
+    total_apps = totals["total_applications"]
+    responded = sum(row["count"] for row in by_status if row["status"] != "Applied")
+    response_rate = round(responded * 100 / total_apps) if total_apps else 0
+
+    return render_template("dashboard.html", totals=totals, by_status=by_status,
+                           top_companies=top_companies, salaries=salaries, recent=recent,
+                           responded=responded, response_rate=response_rate)
 
 # Companies CRUD routes
 COMPANY_FIELDS = ("company_name", "industry", "website", "city", "state", "notes")

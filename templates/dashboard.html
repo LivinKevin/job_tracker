@@ -1,5 +1,78 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Dashboard</h1>
-<p>Total applications: {{ stats.count }}</p>
+{% set colors = {'Applied': 'primary', 'Screening': 'info', 'Interview': 'warning',
+                 'Offer': 'success', 'Rejected': 'danger', 'Withdrawn': 'secondary'} %}
+<h1 class="mb-4">Dashboard</h1>
+
+<div class="row g-3 mb-4">
+  {% for label, value, link in [('Companies', totals.total_companies, 'companies'),
+                                ('Jobs', totals.total_jobs, 'jobs'),
+                                ('Applications', totals.total_applications, 'applications'),
+                                ('Contacts', totals.total_contacts, 'contacts')] %}
+  <div class="col-6 col-md-3">
+    <a class="text-decoration-none" href="{{ url_for(link) }}">
+      <div class="card text-center shadow-sm">
+        <div class="card-body">
+          <div class="display-6">{{ value }}</div>
+          <div class="text-muted">{{ label }}</div>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="row g-4">
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100"><div class="card-body">
+      <h5 class="card-title">Applications by status</h5>
+      {% for s in by_status %}
+      <div class="d-flex justify-content-between border-bottom py-2">
+        <span class="badge text-bg-{{ colors.get(s.status, 'secondary') }}">{{ s.status }}</span>
+        <strong>{{ s.count }}</strong>
+      </div>
+      {% else %}<p class="text-muted">No applications yet.</p>{% endfor %}
+      <p class="mt-3 mb-1">Response rate: <strong>{{ response_rate }}%</strong>
+        <span class="text-muted">({{ responded }} of {{ totals.total_applications }} moved past Applied)</span></p>
+      <div class="progress"><div class="progress-bar" style="width: {{ response_rate }}%"></div></div>
+    </div></div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100"><div class="card-body">
+      <h5 class="card-title">Companies with most jobs</h5>
+      {% for c in top_companies %}
+      <div class="d-flex justify-content-between border-bottom py-2">
+        <span>{{ c.company_name }}</span><strong>{{ c.job_count }}</strong>
+      </div>
+      {% else %}<p class="text-muted">No companies yet.</p>{% endfor %}
+    </div></div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100"><div class="card-body">
+      <h5 class="card-title">Average salary by industry</h5>
+      <table class="table table-sm mb-0">
+        <thead><tr><th>Industry</th><th>Avg min</th><th>Avg max</th></tr></thead>
+        <tbody>
+        {% for s in salaries %}
+          <tr><td>{{ s.industry }}</td><td>${{ "{:,.0f}".format(s.avg_min) }}</td><td>${{ "{:,.0f}".format(s.avg_max) }}</td></tr>
+        {% else %}<tr><td colspan="3" class="text-muted">No salary data.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div></div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100"><div class="card-body">
+      <h5 class="card-title">Recent applications</h5>
+      {% for a in recent %}
+      <div class="d-flex justify-content-between border-bottom py-2">
+        <a href="{{ url_for('application_detail', application_id=a.application_id) }}">{{ a.job_title }} at {{ a.company_name }}</a>
+        <span class="badge text-bg-{{ colors.get(a.status, 'secondary') }}">{{ a.status }}</span>
+      </div>
+      {% else %}<p class="text-muted">No applications yet.</p>{% endfor %}
+    </div></div>
+  </div>
+</div>
 {% endblock %}
