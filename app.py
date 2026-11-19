@@ -566,6 +566,72 @@ def delete_contact(contact_id):
     flash("Contact deleted.", "warning")
     return redirect(url_for("contacts"))
 
+# Job Match Algorithm
+def normalize_skill(skill):
+    # "  Python " -> "python", so matching ignores case and extra spaces
+    return skill.strip().lower()
+
+def parse_skill_input(text):
+    # "Python, SQL\nFlask" -> ["Python", "SQL", "Flask"] (no blanks, no duplicates)
+    seen, skills = set(), []
+    for part in text.replace("\n", ",").split(","):
+        part = part.strip()
+        if part and normalize_skill(part) not in seen:
+            seen.add(normalize_skill(part))
+            skills.append(part)
+    return skills
+
+def match_jobs(user_skills):
+    # Returns (ranked matches, number of jobs with no skills listed, number with 0% match)
+    user_set = {normalize_skill(s) for s in user_skills}
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT j.job_id, j.job_title, j.job_type, j.requirements, c.company_name "
+        "FROM jobs j JOIN companies c ON j.company_id = c.company_id")
+    all_jobs = cursor.fetchall()
+    conn.close()
+
+    results, no_requirements, no_match = [], 0, 0
+    for job in all_jobs:
+        required = parse_skills(job["requirements"]) # type: ignore
+        # Map normalized name -> original spelling, which also removes duplicates
+        required_map = {normalize_skill(s): s for s in required}
+        if not required_map:
+            no_requirements += 1
+            continue
+        matched = [orig for key, orig in required_map.items() if key in user_set]
+        missing = [orig for key, orig in required_map.items() if key not in user_set]
+        if not matched:
+            no_match += 1
+            continue
+        results.append({
+            "job_id": job["job_id"],                # type: ignore
+            "job_title": job["job_title"],          # type: ignore
+            "company_name": job["company_name"],    # type: ignore
+            "job_type": job["job_type"],            # type: ignore
+            "percent": round(len(matched) * 100 / len(required_map)),
+            "matched": matched,
+            "missing": missing,
+            "total": len(required_map),
+        })
+    # Highest percentage first; ties -> more matched skills, then alphabetical
+    results.sort(key=lambda r: (-r["percent"], -len(r["matched"]), r["job_title"]))
+    return results, no_requirements, no_match
+
+@app.route("/job-match")
+def job_match():
+    skills_text = request.args.get("skills", "").strip()
+    user_skills = parse_skill_input(skills_text)
+    results = no_requirements = no_match = None
+    if "skills" in request.args:
+        if user_skills:
+            results, no_requirements, no_match = match_jobs(user_skills)
+        else:
+            flash("Enter at least one skill.", "danger")
+    return render_template("job_match.html", skills_text=skills_text, user_skills=user_skills,
+                           results=results, no_requirements=no_requirements, no_match=no_match)
+
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -1,0 +1,49 @@
+ {% extends "base.html" %}
+{% block content %}
+<h1>Job Match</h1>
+<p class="text-muted">Enter your skills and see which jobs fit best.</p>
+
+<form method="get" class="row g-2 mb-4">
+  <div class="col-md-8">
+    <input class="form-control" name="skills" value="{{ skills_text }}"
+           placeholder="Your skills, comma-separated: Python, SQL, Flask">
+  </div>
+  <div class="col-auto"><button class="btn btn-primary">Find matching jobs</button></div>
+</form>
+
+{% if results is not none %}
+  <p>Your skills:
+    {% for s in user_skills %}<span class="badge text-bg-dark">{{ s }}</span> {% endfor %}</p>
+
+  {% for r in results %}
+  <div class="card mb-2 shadow-sm"><div class="card-body">
+    <div class="d-flex justify-content-between align-items-center">
+      <div>
+        <strong>{{ loop.index }}. <a href="{{ url_for('job_detail', job_id=r.job_id) }}">{{ r.job_title }}</a></strong>
+        at {{ r.company_name }}
+        <span class="text-muted">· {{ r.job_type or '' }}</span>
+      </div>
+      <div class="fs-5 fw-bold">{{ r.percent }}%
+        <small class="text-muted fs-6">({{ r.matched|length }}/{{ r.total }} skills)</small></div>
+    </div>
+    <div class="progress my-2" style="height: 8px;">
+      <div class="progress-bar {% if r.percent == 100 %}bg-success{% elif r.percent >= 50 %}bg-warning{% else %}bg-danger{% endif %}"
+           style="width: {{ r.percent }}%"></div>
+    </div>
+    <div>
+      {% for s in r.matched %}<span class="badge text-bg-success">{{ s }}</span> {% endfor %}
+      {% for s in r.missing %}<span class="badge text-bg-light border text-danger">Missing: {{ s }}</span> {% endfor %}
+    </div>
+  </div></div>
+  {% else %}
+  <p class="text-muted">No jobs matched any of those skills.</p>
+  {% endfor %}
+
+  {% if no_match or no_requirements %}
+  <p class="text-muted small mt-3">
+    {% if no_match %}{{ no_match }} job(s) matched none of your skills. {% endif %}
+    {% if no_requirements %}{{ no_requirements }} job(s) have no skills listed.{% endif %}
+  </p>
+  {% endif %}
+{% endif %}
+{% endblock %}
