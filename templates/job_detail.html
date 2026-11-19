@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ job.job_title }}</h1>
+<p class="text-muted"><a href="{{ url_for('company_detail', company_id=company.company_id) }}">{{ company.company_name }}</a>
+  · {{ job.job_type or '' }}
+  {% if job.salary_min %}· ${{ "{:,}".format(job.salary_min) }}{% endif %}{% if job.salary_max %} – ${{ "{:,}".format(job.salary_max) }}{% endif %}</p>
+{% if job.job_url %}<p>{{ job.job_url }}</p>{% endif %}
+{% if job.date_posted %}<p>Posted: {{ job.date_posted }}</p>{% endif %}
+
+<h4>Required skills</h4>
+<p>{% for s in skills %}<span class="badge text-bg-secondary">{{ s }}</span> {% else %}<span class="text-muted">None listed</span>{% endfor %}</p>
+
+<h4>Applications</h4>
+<ul>{% for a in applications %}<li>{{ a.application_date }}: {{ a.status }}</li>{% else %}<li class="text-muted">None</li>{% endfor %}</ul>
+
+<a href="{{ url_for('jobs') }}">Back to jobs</a>
+{% endblock %}

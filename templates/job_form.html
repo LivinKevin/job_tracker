@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ action }} Job</h1>
+<form method="post" class="col-md-6">
+  <div class="mb-3"><label class="form-label">Company *</label>
+    <select class="form-select" name="company_id" required>
+      <option value="">Choose a company...</option>
+      {% for c in companies %}
+      <option value="{{ c.company_id }}" {% if job.company_id|string == c.company_id|string %}selected{% endif %}>{{ c.company_name }}</option>
+      {% endfor %}
+    </select></div>
+  <div class="mb-3"><label class="form-label">Job title *</label>
+    <input class="form-control" name="job_title" value="{{ job.job_title or '' }}" required></div>
+  <div class="mb-3"><label class="form-label">Job type</label>
+    <select class="form-select" name="job_type">
+      <option value="">Choose...</option>
+      {% for t in job_types %}
+      <option value="{{ t }}" {% if job.job_type == t %}selected{% endif %}>{{ t }}</option>
+      {% endfor %}
+    </select></div>
+  <div class="row">
+    <div class="col mb-3"><label class="form-label">Salary min</label>
+      <input class="form-control" type="number" min="0" name="salary_min" value="{{ job.salary_min if job.salary_min is not none else '' }}"></div>
+    <div class="col mb-3"><label class="form-label">Salary max</label>
+      <input class="form-control" type="number" min="0" name="salary_max" value="{{ job.salary_max if job.salary_max is not none else '' }}"></div>
+  </div>
+  <div class="mb-3"><label class="form-label">Job URL</label>
+    <input class="form-control" name="job_url" value="{{ job.job_url or '' }}"></div>
+  <div class="mb-3"><label class="form-label">Date posted</label>
+    <input class="form-control" type="date" name="date_posted" value="{{ job.date_posted or '' }}"></div>
+  <div class="mb-3"><label class="form-label">Required skills (comma-separated)</label>
+    <input class="form-control" name="requirements" value="{{ skills_text }}" placeholder="Python, SQL, Flask"></div>
+  <button class="btn btn-primary">Save</button>
+  <a class="btn btn-link" href="{{ url_for('jobs') }}">Cancel</a>
+</form>
+{% endblock %}
